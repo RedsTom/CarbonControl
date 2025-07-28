@@ -14,17 +14,17 @@ Built to replace or enhance the default WebUI using the SDCP WebSocket API — n
 - 🖨️ Full print control: start, pause, stop, continue
 - 🚀 Set print speed percentage
 - 🌬️ Control individual fan speeds (Model, Auxiliary, Box)
-- 💡 Toggle lighting and set RGB values
 - 🎯 Move axes and perform homing
 - 🎥 Display live camera stream via MJPEG URL
 - 🛠️ Built-in handling of SDCP protocol quirks (e.g., `CurrenCoord`, `RelaseFilmState`)
 - ⚠️ Basic console-based error handling
+- 🔍 **Device discovery** via UDP broadcast (requires backend or native app)
 
 ---
 
 ## 🧪 Planned Features (TODO)
 
-- 🔍 **Device discovery** via UDP broadcast (requires backend or native app)
+
 - 🗑️ File deletion (single + batch)
 - 🕓 View **print history** and detailed task info (errors, thumbnails, timelapse links)
 - 🎞️ Enable/disable **time-lapse recording**
