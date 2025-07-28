@@ -1,6 +1,7 @@
 "use client"
 
 import { v4 as uuidv4 } from "uuid"
+import SparkMD5 from "spark-md5"
 
 export interface PrinterStatus {
   CurrentStatus: number[]
@@ -139,26 +140,88 @@ export class SDCPClient {
 
   async discoverPrinter(broadcastAddress = "255.255.255.255"): Promise<any> {
     return new Promise((resolve, reject) => {
-      // Note: Browser WebSocket API doesn't support UDP, so we'll simulate discovery
-      // In a real implementation, you'd need a backend service to handle UDP discovery
-      console.log("Simulating printer discovery...")
+      // Import UDP discovery dynamically to avoid SSR issues
+      import('./udp-discovery').then(({ UDPDiscovery }) => {
+        const discovery = new UDPDiscovery();
+        
+        discovery.on('discovered', (printer: any) => {
+          console.log('Discovered printer:', printer);
+          this.emit('printerDiscovered', printer);
+        });
 
-      // Simulate discovered printer data
-      setTimeout(() => {
-        const mockDiscovery = {
-          Id: uuidv4(),
-          Data: {
-            Name: "Centauri Carbon",
-            MachineName: "Centauri Carbon",
-            BrandName: "Centauri",
-            MainboardIP: "192.168.1.100", // Use the IP from your UI
-            MainboardID: "000000000001d354",
-            ProtocolVersion: "V3.0.0",
-            FirmwareVersion: "V1.0.0",
-          },
-        }
-        resolve(mockDiscovery)
-      }, 1000)
+        discovery.on('complete', (printers: any[]) => {
+          console.log('Discovery completed. Found printers:', printers);
+          if (printers.length > 0) {
+            resolve(printers[0]); // Return first discovered printer
+          } else {
+            // Fallback to simulated discovery
+            setTimeout(() => {
+              const mockDiscovery = {
+                Id: uuidv4(),
+                Data: {
+                  Name: "Centauri Carbon",
+                  MachineName: "Centauri Carbon",
+                  BrandName: "Centauri",
+                  MainboardIP: "192.168.1.100",
+                  MainboardID: "000000000001d354",
+                  ProtocolVersion: "V3.0.0",
+                  FirmwareVersion: "V1.0.0",
+                },
+              }
+              resolve(mockDiscovery)
+            }, 1000)
+          }
+        });
+
+        discovery.on('error', (error: any) => {
+          console.error('Discovery error:', error);
+          // Fallback to simulated discovery
+          setTimeout(() => {
+            const mockDiscovery = {
+              Id: uuidv4(),
+              Data: {
+                Name: "Centauri Carbon",
+                MachineName: "Centauri Carbon",
+                BrandName: "Centauri",
+                MainboardIP: "192.168.1.100",
+                MainboardID: "000000000001d354",
+                ProtocolVersion: "V3.0.0",
+                FirmwareVersion: "V1.0.0",
+              },
+            }
+            resolve(mockDiscovery)
+          }, 1000)
+        });
+
+        // Start discovery
+        discovery.discoverPrinters({
+          timeout: 5000,
+          broadcastAddress,
+          port: 3030,
+          retries: 3
+        }).catch((error: any) => {
+          console.error('Discovery failed:', error);
+          reject(error);
+        });
+      }).catch((error: any) => {
+        console.error('Failed to load UDP discovery:', error);
+        // Fallback to simulated discovery
+        setTimeout(() => {
+          const mockDiscovery = {
+            Id: uuidv4(),
+            Data: {
+              Name: "Centauri Carbon",
+              MachineName: "Centauri Carbon",
+              BrandName: "Centauri",
+              MainboardIP: "192.168.1.100",
+              MainboardID: "000000000001d354",
+              ProtocolVersion: "V3.0.0",
+              FirmwareVersion: "V1.0.0",
+            },
+          }
+          resolve(mockDiscovery)
+        }, 1000)
+      });
     })
   }
 
@@ -471,11 +534,11 @@ export class SDCPClient {
 
   // History Commands
   async getHistoryTasks(): Promise<any> {
-    return this.sendCommand(320)
+    return this.sendCommand(320, {});
   }
 
   async getTaskDetails(taskIds: string[]): Promise<any> {
-    return this.sendCommand(321, { Id: taskIds })
+    return this.sendCommand(321, { Id: taskIds });
   }
 
   // Video Stream Commands
@@ -494,16 +557,17 @@ export class SDCPClient {
   }
 
   async enableTimeLapse(): Promise<any> {
-    return this.sendCommand(387, { Enable: 1 })
+    return this.sendCommand(387, { Enable: 1 });
   }
 
   async disableTimeLapse(): Promise<any> {
-    return this.sendCommand(387, { Enable: 0 })
+    return this.sendCommand(387, { Enable: 0 });
   }
 
-  // File Transfer Commands
+
+
   async terminateFileTransfer(uuid: string, filename: string): Promise<any> {
-    return this.sendCommand(255, { Uuid: uuid, FileName: filename })
+    return this.sendCommand(255, { Uuid: uuid, FileName: filename });
   }
 
   // Movement Commands (for stepper control)
@@ -522,29 +586,50 @@ export class SDCPClient {
     return this.sendCommand(256, { Gcode: gcode })
   }
 
-  // File Upload via HTTP
-  async uploadFile(filename: string, fileData: ArrayBuffer): Promise<any> {
-    const url = `http://${this.printerIP}:3030/uploadFile/upload`
+  // File Upload via HTTP (chunked, matching original UI)
+  async uploadFile(filename: string, fileData: ArrayBuffer, onProgress?: (progress: number) => void): Promise<any> {
+    const url = `/api/proxy-upload`;
+    const chunkSize = 1024 * 1024 * 1; // 1MB per docs
+    const totalSize = fileData.byteLength;
+    const uuid = uuidv4();
 
-    // Calculate MD5 hash
-    const hashBuffer = await crypto.subtle.digest("MD5", fileData)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+    // Calculate MD5 hash of the whole file using spark-md5
+    const hashHex = SparkMD5.ArrayBuffer.hash(fileData);
 
-    const formData = new FormData()
-    formData.append("TotalSize", fileData.byteLength.toString())
-    formData.append("Uuid", uuidv4())
-    formData.append("Offset", "0")
-    formData.append("Check", "1")
-    formData.append("S-File-MD5", hashHex)
-    formData.append("File", new Blob([fileData]), filename)
+    let offset = 0;
+    let lastResponse = null;
+    while (offset < totalSize) {
+      const end = Math.min(offset + chunkSize, totalSize);
+      const chunk = fileData.slice(offset, end);
+      const formData = new FormData();
+      formData.append("TotalSize", totalSize.toString());
+      formData.append("Uuid", uuid);
+      formData.append("Offset", offset.toString());
+      formData.append("Check", "1");
+      formData.append("S-File-MD5", hashHex);
+      formData.append("File", new Blob([chunk]), filename);
 
-    const response = await fetch(url, {
-      method: "POST",
-      body: formData,
-    })
+      // Call onProgress before sending the chunk
+      if (onProgress) {
+        onProgress(Math.round((offset / totalSize) * 100));
+      }
 
-    return response.json()
+      const response = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      lastResponse = await response.json();
+      // Check for both code and Code fields
+      if (!response.ok || lastResponse?.Code > 0 || (lastResponse?.code && lastResponse.code !== "000000")) {
+        throw new Error(`Upload failed at offset ${offset}: ${JSON.stringify(lastResponse)}`);
+      }
+      offset = end;
+    }
+    // Ensure progress is 100% at the end
+    if (onProgress) {
+      onProgress(100);
+    }
+    return lastResponse;
   }
 
   disconnect() {
@@ -605,7 +690,5 @@ export class SDCPClient {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('api-console-log', { detail: { type, data, time: new Date() } }))
     }
-    // Also log to console for dev
-    console.log(`[API Console][${type}]`, data)
   }
 }

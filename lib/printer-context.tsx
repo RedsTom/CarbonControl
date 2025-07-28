@@ -23,9 +23,18 @@ interface PrinterContextType {
   enableVideoStream: () => Promise<void>
   disableVideoStream: () => Promise<void>
   getFileList: (path?: string) => Promise<any>
-  uploadFile: (filename: string, fileData: ArrayBuffer) => Promise<any>
+  uploadFile: (filename: string, fileData: ArrayBuffer, onProgress?: (progress: number) => void) => Promise<any>
   homeAxis: (axis?: "X" | "Y" | "Z") => Promise<void>
   moveAxis: (axis: "X" | "Y" | "Z", distance: number) => Promise<void>
+  deleteFiles: (fileList: string[], folderList: string[]) => Promise<any>
+  getHistoryTasks: () => Promise<any>
+  getTaskDetails: (taskIds: string[]) => Promise<any>
+  enableTimeLapse: () => Promise<any>;
+  disableTimeLapse: () => Promise<any>;
+  stopMaterialFeeding: () => Promise<any>;
+  skipPreheating: () => Promise<any>;
+  changePrinterName: (name: string) => Promise<any>;
+  terminateFileTransfer: (uuid: string, filename: string) => Promise<any>;
 }
 
 const PrinterContext = createContext<PrinterContextType | undefined>(undefined)
@@ -182,9 +191,16 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     [client],
   )
 
+  const deleteFiles = useCallback(
+    async (fileList: string[] = [], folderList: string[] = []) => {
+      return await client.deleteFiles(fileList, folderList)
+    },
+    [client],
+  )
+
   const uploadFile = useCallback(
-    async (filename: string, fileData: ArrayBuffer) => {
-      return await client.uploadFile(filename, fileData)
+    async (filename: string, fileData: ArrayBuffer, onProgress?: (progress: number) => void) => {
+      return await client.uploadFile(filename, fileData, onProgress)
     },
     [client],
   )
@@ -203,6 +219,44 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     },
     [client],
   )
+
+  const getHistoryTasks = useCallback(
+    async () => {
+      return await client.getHistoryTasks();
+    },
+    [client],
+  );
+
+  const getTaskDetails = useCallback(
+    async (taskIds: string[]) => {
+      return await client.getTaskDetails(taskIds);
+    },
+    [client],
+  );
+
+  const enableTimeLapse = useCallback(async () => {
+    return await client.enableTimeLapse();
+  }, [client]);
+
+  const disableTimeLapse = useCallback(async () => {
+    return await client.disableTimeLapse();
+  }, [client]);
+
+  const stopMaterialFeeding = useCallback(async () => {
+    return await client.stopMaterialFeeding();
+  }, [client]);
+
+  const skipPreheating = useCallback(async () => {
+    return await client.skipPreheating();
+  }, [client]);
+
+  const changePrinterName = useCallback(async (name: string) => {
+    return await client.changePrinterName(name);
+  }, [client]);
+
+  const terminateFileTransfer = useCallback(async (uuid: string, filename: string) => {
+    return await client.terminateFileTransfer(uuid, filename);
+  }, [client]);
 
   return (
     <PrinterContext.Provider
@@ -228,6 +282,15 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
         uploadFile,
         homeAxis,
         moveAxis,
+        deleteFiles,
+        getHistoryTasks,
+        getTaskDetails,
+        enableTimeLapse,
+        disableTimeLapse,
+        stopMaterialFeeding,
+        skipPreheating,
+        changePrinterName,
+        terminateFileTransfer,
       }}
     >
       {children}

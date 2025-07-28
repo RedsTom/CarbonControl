@@ -44,6 +44,161 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react"
+import { Table } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Alert } from "@/components/ui/alert"
+import { Collapsible } from "@/components/ui/collapsible"
+import { ChevronDown, ChevronRight } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { PrinterDiscovery } from "@/components/printer-discovery"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Wifi } from "lucide-react"
+
+function PrintFilesTab(props: any) {
+  // All the Print Files tab logic and JSX here, using props as needed
+  return (
+    <>
+      {props.uploadProgress !== null && (
+        <div className="mb-2">
+          <AnimatedProgress value={props.uploadProgress} showPercentage />
+        </div>
+      )}
+      <div className="mb-2 flex gap-2">
+        <Button size="sm" variant={props.filePath.startsWith("/local/") ? "default" : "outline"} onClick={() => props.handleSwitchStorage("/local/")} disabled={!props.isConnected}>Onboard</Button>
+        {props.filePath !== "/local/" && (
+          <Button size="sm" variant="outline" onClick={props.handleBack} disabled={!props.isConnected}>Back</Button>
+        )}
+        <Button size="sm" variant="destructive" onClick={props.handleDeleteSelected} disabled={!props.isConnected || (props.selectedFiles.size === 0 && props.selectedFolders.size === 0)}>Delete Selected</Button>
+      </div>
+      <div className="mb-2">
+        <Table className="w-full table-fixed">
+          <thead>
+            <tr>
+              <th className="w-8"></th>
+              <th className="w-1/2 truncate">Name</th>
+              <th className="w-20">Type</th>
+              <th className="w-24">Size</th>
+              <th className="w-32">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.isLoadingFiles ? (
+              <tr><td colSpan={5}>Loading...</td></tr>
+            ) : props.fileEntries.length > 0 ? (
+              props.fileEntries.map((entry: any, idx: number) => (
+                <tr key={entry.name}>
+                  <td>
+                    {entry.type === 1 ? (
+                      <Checkbox checked={props.selectedFiles.has(entry.name)} onCheckedChange={checked => props.handleSelectFile(entry.name, !!checked)} />
+                    ) : (
+                      <Checkbox checked={props.selectedFolders.has(entry.name)} onCheckedChange={checked => props.handleSelectFolder(entry.name, !!checked)} />
+                    )}
+                  </td>
+                  <td className="truncate max-w-xs overflow-hidden whitespace-nowrap" title={entry.name.split("/").pop()}>
+                    {entry.type === 0 ? (
+                      <Button variant="link" onClick={() => props.handleEnterFolder(entry)}>{entry.name.split("/").pop()?.slice(0, 24)}{entry.name.split("/").pop()?.length > 24 ? '…' : ''}</Button>
+                    ) : (
+                      <span>{entry.name.split("/").pop()?.slice(0, 24)}{entry.name.split("/").pop()?.length > 24 ? '…' : ''}</span>
+                    )}
+                  </td>
+                  <td>{entry.type === 0 ? "Folder" : "File"}</td>
+                  <td>{entry.type === 1 ? (entry.usedSize / 1024 / 1024).toFixed(1) + " MB" : "-"}</td>
+                  <td className="space-x-2">
+                    {entry.type === 1 && (
+                      <Button size="sm" variant="ghost" onClick={() => props.handlePrintControl("start", entry.name)} disabled={!props.isConnected || props.isPrintInProgress}><Play className="w-4 h-4" /></Button>
+                    )}
+                    <Button size="sm" variant="destructive" onClick={async () => { await props.deleteFiles(entry.type === 1 ? [entry.name] : [], entry.type === 0 ? [entry.name] : []); props.loadFileList(); }} disabled={!props.isConnected}>Delete</Button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr><td colSpan={5}>No files or folders found</td></tr>
+            )}
+          </tbody>
+        </Table>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Button size="sm" className="flex-1 bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95" disabled={!props.isConnected} onClick={() => props.fileInputRef.current?.click()}>
+          <Upload className="w-4 h-4 mr-2" />Upload
+          <input ref={props.fileInputRef} type="file" accept=".gcode" onChange={props.handleFileUpload} className="hidden" />
+        </Button>
+        <Button size="sm" variant="outline" className="flex-1 border-primary/30 hover:bg-primary/10 transition-all duration-200 hover:scale-105 active:scale-95 bg-transparent" onClick={() => props.loadFileList()} disabled={!props.isConnected}>
+          <Download className="w-4 h-4 mr-2" />Refresh
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function PrintHistoryTab(props: any) {
+  return (
+    <Card className="p-4">
+      <h2 className="text-lg font-bold mb-2">Print History</h2>
+      {props.isLoadingHistory ? (
+        <div>Loading...</div>
+      ) : props.historyTasks.length === 0 ? (
+        <div>No print history found.</div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {props.historyTasks.map((taskId: string) => (
+            <div key={taskId} className="border rounded p-2 flex items-center gap-4 cursor-pointer hover:bg-secondary/30" onClick={() => props.handleSelectTask(taskId)}>
+              <span className="font-mono text-xs">{taskId}</span>
+              {props.selectedTask === taskId && props.taskDetails && (
+                <div className="ml-4 flex flex-col gap-1">
+                  {props.taskDetails.Thumbnail && <img src={props.taskDetails.Thumbnail} alt="Thumbnail" className="w-24 h-24 object-cover rounded" />}
+                  <div><b>Name:</b> {props.taskDetails.TaskName}</div>
+                  <div><b>Status:</b> {props.taskDetails.TaskStatus}</div>
+                  <div><b>Error Reason:</b> {props.taskDetails.ErrorStatusReason}</div>
+                  <div><b>Start:</b> {new Date(props.taskDetails.BeginTime * 1000).toLocaleString()}</div>
+                  <div><b>End:</b> {new Date(props.taskDetails.EndTime * 1000).toLocaleString()}</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function AdvancedTab(props: any) {
+  return (
+    <Card className="p-4 flex flex-col gap-4">
+      <h2 className="text-lg font-bold mb-2">Advanced Controls</h2>
+      {props.advancedMessage && <Alert>{props.advancedMessage}</Alert>}
+      <div className="flex items-center gap-4">
+        <span>Time-lapse:</span>
+        <Switch checked={props.isTimeLapseOn} onCheckedChange={props.handleTimeLapseToggle} />
+        <span>{props.isTimeLapseOn ? "Enabled" : "Disabled"}</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <Button onClick={props.handleStopMaterialFeed}>Stop Material Feed</Button>
+        <Button onClick={props.handleSkipPreheat}>Skip Preheat</Button>
+      </div>
+      <div className="flex items-center gap-4">
+        <Input value={props.printerName} onChange={e => props.setPrinterName(e.target.value)} placeholder="New printer name" />
+        <Button onClick={props.handleChangePrinterName}>Change Name</Button>
+      </div>
+      <div className="flex items-center gap-4">
+        <Input value={props.terminateUuid} onChange={e => props.setTerminateUuid(e.target.value)} placeholder="Transfer UUID" />
+        <Input value={props.terminateFile} onChange={e => props.setTerminateFile(e.target.value)} placeholder="File name" />
+        <Button onClick={props.handleTerminateTransfer}>Terminate Transfer</Button>
+      </div>
+      <div className="mt-4">
+        <h3 className="font-semibold mb-2">Extended Status/Attributes</h3>
+        <pre className="bg-secondary/30 rounded p-2 text-xs overflow-x-auto">
+{JSON.stringify(props.attributes, null, 2)}
+        </pre>
+      </div>
+    </Card>
+  );
+}
+
+const tabsConfig = [
+  { id: 'files', label: 'Print Files', component: PrintFilesTab },
+  { id: 'history', label: 'Print History', component: PrintHistoryTab },
+  { id: 'advanced', label: 'Advanced', component: AdvancedTab },
+];
 
 export default function ElegooPrinterUI() {
   const {
@@ -67,9 +222,36 @@ export default function ElegooPrinterUI() {
     uploadFile,
     homeAxis,
     moveAxis,
+    deleteFiles,
+    getHistoryTasks,
+    getTaskDetails,
+    enableTimeLapse,
+    disableTimeLapse,
+    stopMaterialFeeding,
+    skipPreheating,
+    changePrinterName,
+    terminateFileTransfer,
   } = usePrinter()
 
+  const { toast } = useToast()
+
   const [ipAddress, setIpAddress] = useState("192.168.1.100")
+
+  // Load saved IP address from localStorage on mount
+  useEffect(() => {
+    const savedIP = localStorage.getItem('printerIP')
+    if (savedIP) {
+      setIpAddress(savedIP)
+      setIpLoadedFromCache(true)
+      // Show a brief toast notification that IP was loaded from cache
+      setTimeout(() => {
+        toast({
+          title: "IP Address Restored",
+          description: `Loaded saved IP: ${savedIP}`,
+        })
+      }, 500)
+    }
+  }, [])
   const [isConnecting, setIsConnecting] = useState(false)
   const [printSpeed, setPrintSpeedLocal] = useState("balanced")
   const [bedTemp, setBedTemp] = useState([60])
@@ -79,6 +261,37 @@ export default function ElegooPrinterUI() {
   const [isLightsOn, setIsLightsOn] = useState(true)
   const [printFiles, setPrintFiles] = useState<any[]>([])
   const [selectedStepSize, setSelectedStepSize] = useState(1)
+  const [filePath, setFilePath] = useState("/local/");
+  const [fileEntries, setFileEntries] = useState<any[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [historyTasks, setHistoryTasks] = useState<any[]>([]);
+  const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [taskDetails, setTaskDetails] = useState<any | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isTimeLapseOn, setIsTimeLapseOn] = useState(false);
+  const [printerName, setPrinterName] = useState("");
+  const [terminateUuid, setTerminateUuid] = useState("");
+  const [terminateFile, setTerminateFile] = useState("");
+  const [advancedMessage, setAdvancedMessage] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [showDiscoveryDialog, setShowDiscoveryDialog] = useState(false);
+  const [discoveredPrinters, setDiscoveredPrinters] = useState<any[]>([]);
+  const [ipLoadedFromCache, setIpLoadedFromCache] = useState(false);
+
+  // Load discovered printers from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('discoveredPrinters')
+    if (saved) {
+      try {
+        const printers = JSON.parse(saved)
+        setDiscoveredPrinters(printers)
+      } catch (error) {
+        console.error('Failed to load discovered printers:', error)
+      }
+    }
+  }, [])
 
   // Add a ref for the file input
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -96,17 +309,19 @@ export default function ElegooPrinterUI() {
     }
   }, [status]);
 
-  // Load file list when connected
   useEffect(() => {
     if (isConnected) {
-      loadFileList()
+      loadFileList(filePath);
     }
-  }, [isConnected])
+  }, [isConnected, filePath]);
 
   const handleConnect = async () => {
     setIsConnecting(true)
     try {
       await connect(ipAddress)
+      // Clear discovered printers when successfully connected
+      setDiscoveredPrinters([])
+      localStorage.removeItem('discoveredPrinters')
     } catch (error) {
       console.error("Connection failed:", error)
     } finally {
@@ -116,29 +331,126 @@ export default function ElegooPrinterUI() {
 
   const handleDisconnect = () => {
     disconnect()
+    // Optionally clear saved IP on disconnect
+    // Uncomment the line below if you want to clear the IP when disconnecting
+    // localStorage.removeItem('printerIP')
   }
 
-  const loadFileList = async () => {
+  const handlePrinterDiscovered = (printer: any) => {
+    const newIP = printer.data.MainboardIP
+    setIpAddress(newIP)
+    // Save IP to localStorage
+    localStorage.setItem('printerIP', newIP)
+    setShowDiscoveryDialog(false)
+    
+    // Add to discovered printers list
+    setDiscoveredPrinters(prev => {
+      const exists = prev.some(p => p.data.MainboardIP === printer.data.MainboardIP)
+      if (!exists) {
+        const newList = [...prev, printer]
+        // Save to localStorage
+        localStorage.setItem('discoveredPrinters', JSON.stringify(newList))
+        return newList
+      }
+      return prev
+    })
+    
+    toast({
+      title: "Printer Discovered!",
+      description: `Found ${printer.data.Name} at ${newIP}`,
+    })
+  }
+
+  const handleManualConnect = () => {
+    setShowDiscoveryDialog(false)
+  }
+
+  const clearCachedIP = () => {
+    localStorage.removeItem('printerIP')
+    setIpAddress("192.168.1.100")
+    setIpLoadedFromCache(false)
+    toast({
+      title: "Cache Cleared",
+      description: "Saved IP address has been cleared",
+    })
+  }
+
+  const loadFileList = async (path = filePath) => {
+    setIsLoadingFiles(true);
     try {
-      const response = await getFileList("/local/")
+      const response = await getFileList(path);
       if (response.Data?.Data?.FileList) {
-        setPrintFiles(response.Data.Data.FileList.filter((file: any) => file.type === 1)) // Only files
+        setFileEntries(response.Data.Data.FileList);
       }
     } catch (error) {
-      console.error("Failed to load file list:", error)
+      console.error("Failed to load file list:", error);
+    } finally {
+      setIsLoadingFiles(false);
     }
-  }
+  };
+
+  const handleEnterFolder = (folder: any) => {
+    setFilePath(folder.name);
+    setSelectedFiles(new Set());
+    setSelectedFolders(new Set());
+  };
+
+  const handleBack = () => {
+    if (filePath === "/local/" || filePath === "/usb/") return;
+    const parts = filePath.split("/").filter(Boolean);
+    parts.pop();
+    setFilePath("/" + parts.join("/") + (parts.length ? "/" : ""));
+    setSelectedFiles(new Set());
+    setSelectedFolders(new Set());
+  };
+
+  const handleSelectFile = (name: string, checked: boolean) => {
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(name); else next.delete(name);
+      return next;
+    });
+  };
+  const handleSelectFolder = (name: string, checked: boolean) => {
+    setSelectedFolders(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(name); else next.delete(name);
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!isConnected) return;
+    try {
+      await deleteFiles(Array.from(selectedFiles), Array.from(selectedFolders));
+      setSelectedFiles(new Set());
+      setSelectedFolders(new Set());
+      loadFileList();
+    } catch (error) {
+      console.error("Delete failed:", error);
+    }
+  };
+
+  const handleSwitchStorage = (storage: "/local/" | "/usb/") => {
+    setFilePath(storage);
+    setSelectedFiles(new Set());
+    setSelectedFolders(new Set());
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
-
     try {
+      setUploadProgress(0);
       const arrayBuffer = await file.arrayBuffer()
-      await uploadFile(file.name, arrayBuffer)
-      loadFileList() // Refresh file list
+      await uploadFile(file.name, arrayBuffer, (progress: number) => setUploadProgress(progress));
     } catch (error) {
       console.error("File upload failed:", error)
+    } finally {
+      setTimeout(() => {
+        setUploadProgress(null);
+        loadFileList(); // Refresh file list after progress bar disappears
+      }, 1000);
     }
   }
 
@@ -238,17 +550,70 @@ export default function ElegooPrinterUI() {
     }
   }
 
+  const handleTimeLapseToggle = async (checked: boolean) => {
+    try {
+      if (checked) {
+        await enableTimeLapse();
+        setIsTimeLapseOn(true);
+        setAdvancedMessage("Time-lapse enabled.");
+      } else {
+        await disableTimeLapse();
+        setIsTimeLapseOn(false);
+        setAdvancedMessage("Time-lapse disabled.");
+      }
+    } catch (e) {
+      setAdvancedMessage("Failed to toggle time-lapse.");
+    }
+  };
+
+  const handleChangePrinterName = async () => {
+    try {
+      await changePrinterName(printerName);
+      setAdvancedMessage("Printer name changed.");
+    } catch (e) {
+      setAdvancedMessage("Failed to change printer name.");
+    }
+  };
+
+  const handleStopMaterialFeed = async () => {
+    try {
+      await stopMaterialFeeding();
+      setAdvancedMessage("Material feeding stopped.");
+    } catch (e) {
+      setAdvancedMessage("Failed to stop material feeding.");
+    }
+  };
+
+  const handleSkipPreheat = async () => {
+    try {
+      await skipPreheating();
+      setAdvancedMessage("Preheating skipped.");
+    } catch (e) {
+      setAdvancedMessage("Failed to skip preheating.");
+    }
+  };
+
+  const handleTerminateTransfer = async () => {
+    try {
+      await terminateFileTransfer(terminateUuid, terminateFile);
+      setAdvancedMessage("File transfer terminated.");
+    } catch (e) {
+      setAdvancedMessage("Failed to terminate file transfer.");
+    }
+  };
+
   // Get current status information
   const currentStatus = status?.CurrentStatus?.[0] || 0
   const printerStatusText = SDCPClient.getStatusText(currentStatus)
   const printInfoStatus = status?.PrintInfo?.Status;
+  // Print status helpers
   const isPrintActive = printInfoStatus === 1; // Printing
-  const isPrintPaused = printInfoStatus === 6; // Paused
   const isPrintPausing = printInfoStatus === 5; // Pausing
+  const isPrintPaused = printInfoStatus === 6; // Paused
   const isPrintStopping = printInfoStatus === 7; // Stopping
   const isPrintStopped = printInfoStatus === 8; // Stopped
   const isPrintComplete = printInfoStatus === 9; // Complete
-  const isPrintingOrPaused = isPrintActive || isPrintPaused;
+  const isPrintInProgress = isPrintActive || isPrintPausing || isPrintPaused || isPrintStopping;
   const printProgress = status?.PrintInfo
     ? Math.round((status.PrintInfo.CurrentLayer / status.PrintInfo.TotalLayer) * 100)
     : 0
@@ -277,7 +642,6 @@ export default function ElegooPrinterUI() {
     if (isConnected) setConnectedIp(ipAddress);
   }, [isConnected, ipAddress]);
   const debugVideoUrl = connectedIp ? `http://${connectedIp}:3031/video` : null;
-  console.log('Camera debug:', connectedIp, debugVideoUrl);
 
   // Fan states for individual fans
   const modelFanSpeed = status?.CurrentFanSpeed?.ModelFan ?? 0;
@@ -285,6 +649,33 @@ export default function ElegooPrinterUI() {
   const boxFanSpeed = status?.CurrentFanSpeed?.BoxFan ?? 0;
   const isModelFanOn = modelFanSpeed > 0;
   const isAuxFanOn = auxFanSpeed > 0;
+
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const resp = await getHistoryTasks();
+      const ids = resp.Data?.Data?.HistoryData || [];
+      setHistoryTasks(ids);
+    } catch (e) {
+      setHistoryTasks([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleSelectTask = async (taskId: string) => {
+    setSelectedTask(taskId);
+    setTaskDetails(null);
+    try {
+      const resp = await getTaskDetails([taskId]);
+      setTaskDetails(resp.Data?.Data?.HistoryDetailList?.[0] || null);
+    } catch (e) {
+      setTaskDetails(null);
+    }
+  };
+
+  // Add state for collapsible
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 transition-all duration-300 theme-transition">
@@ -316,13 +707,39 @@ export default function ElegooPrinterUI() {
             <Label htmlFor="ip-address" className="text-sm font-medium text-muted-foreground">
               IP Address:
             </Label>
-            <Input
-              id="ip-address"
-              value={ipAddress}
-              onChange={(e) => setIpAddress(e.target.value)}
-              className="w-48 bg-input border-border transition-all duration-200 focus:border-primary focus:ring-primary/20"
-              disabled={isConnected}
-            />
+            <div className="relative">
+              <Input
+                id="ip-address"
+                value={ipAddress}
+                onChange={(e) => {
+                  const newIP = e.target.value
+                  setIpAddress(newIP)
+                  // Save IP to localStorage when manually changed
+                  localStorage.setItem('printerIP', newIP)
+                }}
+                className="w-48 bg-input border-border transition-all duration-200 focus:border-primary focus:ring-primary/20"
+                disabled={isConnected}
+              />
+              {ipLoadedFromCache && !isConnected && (
+                <div className="absolute -top-2 -right-2 flex items-center gap-1">
+                  <Badge 
+                    variant="outline" 
+                    className="text-xs bg-green-500/10 border-green-500/30 text-green-600"
+                  >
+                    Cached
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={clearCachedIP}
+                    className="h-4 w-4 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    title="Clear cached IP"
+                  >
+                    ×
+                  </Button>
+                </div>
+              )}
+            </div>
             {isConnected ? (
               <Button
                 size="sm"
@@ -334,22 +751,87 @@ export default function ElegooPrinterUI() {
                 Disconnect
               </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={handleConnect}
-                disabled={isConnecting}
-                className="bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                {isConnecting ? "Connecting..." : "Connect"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleConnect}
+                  disabled={isConnecting}
+                  className="bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {isConnecting ? "Connecting..." : "Connect"}
+                </Button>
+                <Dialog open={showDiscoveryDialog} onOpenChange={setShowDiscoveryDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-500/30 hover:bg-blue-500/10 transition-all duration-200 hover:scale-105 active:scale-95"
+                    >
+                      <Wifi className="w-4 h-4 mr-2" />
+                      Discover
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Wifi className="w-5 h-5" />
+                        Printer Discovery
+                      </DialogTitle>
+                    </DialogHeader>
+                    <PrinterDiscovery
+                      onPrinterSelected={handlePrinterDiscovered}
+                      onManualConnect={handleManualConnect}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-3">
+            {!isConnected && (
+              <Badge variant="outline" className="text-xs">
+                <Wifi className="w-3 h-3 mr-1" />
+                Click "Discover" to find printers
+              </Badge>
+            )}
             <ColorPicker />
           </div>
         </div>
       </div>
+
+      {/* Recently Discovered Printers */}
+      {!isConnected && discoveredPrinters.length > 0 && (
+        <div className="mb-6 p-4 bg-secondary/20 rounded-lg border border-border/50">
+          <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+            <Wifi className="w-4 h-4" />
+            Recently Discovered Printers
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {discoveredPrinters.map((printer, index) => (
+              <Button
+                key={printer.id || index}
+                size="sm"
+                variant="outline"
+                              onClick={() => {
+                const newIP = printer.data.MainboardIP
+                setIpAddress(newIP)
+                // Save IP to localStorage
+                localStorage.setItem('printerIP', newIP)
+                toast({
+                  title: "Printer Selected",
+                  description: `Ready to connect to ${printer.data.Name}`,
+                })
+              }}
+                className="text-xs"
+              >
+                <Wifi className="w-3 h-3 mr-1" />
+                {printer.data.Name} ({printer.data.MainboardIP})
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -359,63 +841,107 @@ export default function ElegooPrinterUI() {
           icon={<FileText className="w-5 h-5" />}
           status={isConnected ? "online" : "offline"}
         >
-          <div className="space-y-3 mb-4">
-            {printFiles.length > 0 ? (
-              printFiles.slice(0, 4).map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg border border-border/30 transition-all duration-200 hover:bg-secondary/70 hover:border-primary/30 animate-scale-in"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">{(file.usedSize / 1024 / 1024).toFixed(1)} MB</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="hover:bg-primary/20 hover:text-primary transition-all duration-200 hover:scale-110"
-                    onClick={() => handlePrintControl("start", file.name)}
-                    disabled={!isConnected || isPrintingOrPaused}
-                  >
-                    <Play className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))
-            ) : (
-              <div className="text-center text-muted-foreground py-4">
-                {isConnected ? "No files found" : "Connect to view files"}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              className="flex-1 bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95"
-              disabled={!isConnected}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Upload
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".gcode"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1 border-primary/30 hover:bg-primary/10 transition-all duration-200 hover:scale-105 active:scale-95 bg-transparent"
-              onClick={loadFileList}
-              disabled={!isConnected}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
+          <PrintFilesTab
+            {...{
+              isConnected,
+              status,
+              attributes,
+              videoUrl,
+              connect,
+              disconnect,
+              startPrint,
+              pausePrint,
+              stopPrint,
+              continuePrint,
+              setPrintSpeed,
+              setTemperature,
+              setFanSpeeds,
+              setLighting,
+              enableVideoStream,
+              disableVideoStream,
+              getFileList,
+              uploadFile,
+              homeAxis,
+              moveAxis,
+              deleteFiles,
+              getHistoryTasks,
+              getTaskDetails,
+              enableTimeLapse,
+              disableTimeLapse,
+              stopMaterialFeeding,
+              skipPreheating,
+              changePrinterName,
+              terminateFileTransfer,
+              loadFileList,
+              filePath,
+              setFilePath,
+              fileEntries,
+              setFileEntries,
+              selectedFiles,
+              setSelectedFiles,
+              selectedFolders,
+              setSelectedFolders,
+              isLoadingFiles,
+              setIsLoadingFiles,
+              historyTasks,
+              setHistoryTasks,
+              selectedTask,
+              setSelectedTask,
+              taskDetails,
+              setTaskDetails,
+              isLoadingHistory,
+              setIsLoadingHistory,
+              isTimeLapseOn,
+              setIsTimeLapseOn,
+              printerName,
+              setPrinterName,
+              terminateUuid,
+              setTerminateUuid,
+              terminateFile,
+              setTerminateFile,
+              advancedMessage,
+              setAdvancedMessage,
+              uploadProgress,
+              setUploadProgress,
+              fileInputRef,
+              handlePrintControl,
+              handleTemperatureChange,
+              handleFanSpeedChange,
+              handleLightingToggle,
+              handleSpeedProfileChange,
+              handleAxisMovement,
+              handleHoming,
+              handleVideoStream,
+              handleTimeLapseToggle,
+              handleChangePrinterName,
+              handleStopMaterialFeed,
+              handleSkipPreheat,
+              handleTerminateTransfer,
+              selectedStepSize,
+              setSelectedStepSize,
+              nozzleInput,
+              setNozzleInput,
+              bedInput,
+              setBedInput,
+              modelFanSpeed,
+              auxFanSpeed,
+              boxFanSpeed,
+              isModelFanOn,
+              isAuxFanOn,
+              loadHistory,
+              handleSelectTask,
+              handleSelectFile,
+              handleSelectFolder,
+              handleDeleteSelected,
+              handleSwitchStorage,
+              handleFileUpload,
+              handleEnterFolder,
+              handleBack,
+              isAdvancedOpen,
+              setIsAdvancedOpen,
+              isPrintInProgress,
+            }}
+          />
         </StatusCard>
 
         {/* Camera Control */}
@@ -454,7 +980,7 @@ export default function ElegooPrinterUI() {
         <StatusCard
           title="Current Print"
           icon={<Activity className="w-5 h-5" />}
-          status={isPrintingOrPaused ? "online" : "offline"}
+          status={isPrintInProgress ? "online" : "offline"}
         >
           <div className="space-y-4">
             <div>
@@ -467,7 +993,8 @@ export default function ElegooPrinterUI() {
             </div>
             <AnimatedProgress value={printProgress} showPercentage />
             <div className="flex gap-2">
-              {isPrintActive && (
+              {/* Show Pause only when progress bar is updating and not paused */}
+              {(printProgress > 0 && printProgress < 100 && !isPrintPaused) && (
                 <Button
                   size="sm"
                   className="flex-1 bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95"
@@ -478,7 +1005,8 @@ export default function ElegooPrinterUI() {
                   Pause
                 </Button>
               )}
-              {isPrintPaused && (
+              {/* Show Resume only when progress bar is updating and paused */}
+              {(printProgress > 0 && printProgress < 100 && isPrintPaused) && (
                 <Button
                   size="sm"
                   className="flex-1 bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95"
@@ -489,16 +1017,19 @@ export default function ElegooPrinterUI() {
                   Resume
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="destructive"
-                className="flex-1 transition-all duration-200 hover:scale-105 active:scale-95"
-                onClick={() => handlePrintControl("stop")}
-                disabled={!isConnected}
-              >
-                <Square className="w-4 h-4 mr-2" />
-                Stop
-              </Button>
+              {/* Always show Stop when a print is in progress */}
+              {isPrintInProgress && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1 transition-all duration-200 hover:scale-105 active:scale-95"
+                  onClick={() => handlePrintControl("stop")}
+                  disabled={!isConnected}
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+              )}
             </div>
           </div>
         </StatusCard>
@@ -512,7 +1043,7 @@ export default function ElegooPrinterUI() {
                 variant={printSpeed === profile.id ? "default" : "outline"}
                 size="sm"
                 onClick={() => handleSpeedProfileChange(profile.id)}
-                disabled={!isConnected || !isPrintingOrPaused}
+                disabled={!isConnected || !(printProgress > 0 && printProgress < 100)}
                 className={`flex flex-col h-auto p-4 transition-all duration-300 hover:scale-105 active:scale-95 ${
                   printSpeed === profile.id
                     ? "bg-primary hover:bg-primary/90 animate-glow"
@@ -904,6 +1435,129 @@ export default function ElegooPrinterUI() {
           </div>
         </StatusCard>
       </div>
+      {/* Advanced (Dev Only) */}
+      <Collapsible open={isAdvancedOpen} onOpenChange={setIsAdvancedOpen} className="mt-12">
+        <div className="flex items-center cursor-pointer select-none mb-2" onClick={() => setIsAdvancedOpen(v => !v)}>
+          {isAdvancedOpen ? <ChevronDown className="w-5 h-5 mr-2 text-red-500" /> : <ChevronRight className="w-5 h-5 mr-2 text-red-500" />}
+          <h2 className="text-lg font-bold text-red-500">Advanced (Dev Only)</h2>
+        </div>
+        {isAdvancedOpen && (
+          <Card className="p-4 border-2 border-dashed border-red-500 bg-background/80">
+            <Tabs defaultValue="files" className="w-full">
+              <TabsList className="mb-4">
+                {tabsConfig.map(tab => (
+                  <TabsTrigger key={tab.id} value={tab.id}>{tab.label}</TabsTrigger>
+                ))}
+              </TabsList>
+              {tabsConfig.map(tab => (
+                <TabsContent key={tab.id} value={tab.id}>
+                  <tab.component
+                    {...{
+                      isConnected,
+                      status,
+                      attributes,
+                      videoUrl,
+                      connect,
+                      disconnect,
+                      startPrint,
+                      pausePrint,
+                      stopPrint,
+                      continuePrint,
+                      setPrintSpeed,
+                      setTemperature,
+                      setFanSpeeds,
+                      setLighting,
+                      enableVideoStream,
+                      disableVideoStream,
+                      getFileList,
+                      uploadFile,
+                      homeAxis,
+                      moveAxis,
+                      deleteFiles,
+                      getHistoryTasks,
+                      getTaskDetails,
+                      enableTimeLapse,
+                      disableTimeLapse,
+                      stopMaterialFeeding,
+                      skipPreheating,
+                      changePrinterName,
+                      terminateFileTransfer,
+                      loadFileList,
+                      filePath,
+                      setFilePath,
+                      fileEntries,
+                      setFileEntries,
+                      selectedFiles,
+                      setSelectedFiles,
+                      selectedFolders,
+                      setSelectedFolders,
+                      isLoadingFiles,
+                      setIsLoadingFiles,
+                      historyTasks,
+                      setHistoryTasks,
+                      selectedTask,
+                      setSelectedTask,
+                      taskDetails,
+                      setTaskDetails,
+                      isLoadingHistory,
+                      setIsLoadingHistory,
+                      isTimeLapseOn,
+                      setIsTimeLapseOn,
+                      printerName,
+                      setPrinterName,
+                      terminateUuid,
+                      setTerminateUuid,
+                      terminateFile,
+                      setTerminateFile,
+                      advancedMessage,
+                      setAdvancedMessage,
+                      uploadProgress,
+                      setUploadProgress,
+                      fileInputRef,
+                      handlePrintControl,
+                      handleTemperatureChange,
+                      handleFanSpeedChange,
+                      handleLightingToggle,
+                      handleSpeedProfileChange,
+                      handleAxisMovement,
+                      handleHoming,
+                      handleVideoStream,
+                      handleTimeLapseToggle,
+                      handleChangePrinterName,
+                      handleStopMaterialFeed,
+                      handleSkipPreheat,
+                      handleTerminateTransfer,
+                      selectedStepSize,
+                      setSelectedStepSize,
+                      nozzleInput,
+                      setNozzleInput,
+                      bedInput,
+                      setBedInput,
+                      modelFanSpeed,
+                      auxFanSpeed,
+                      boxFanSpeed,
+                      isModelFanOn,
+                      isAuxFanOn,
+                      loadHistory,
+                      handleSelectTask,
+                      handleSelectFile,
+                      handleSelectFolder,
+                      handleDeleteSelected,
+                      handleSwitchStorage,
+                      handleFileUpload,
+                      handleEnterFolder,
+                      handleBack,
+                      isAdvancedOpen,
+                      setIsAdvancedOpen,
+                      isPrintInProgress,
+                    }}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          </Card>
+        )}
+      </Collapsible>
       {/* Footer with protocol credit and quote */}
       <div className="mt-12 text-center text-xs text-muted-foreground opacity-80">
         <div>Protocol put together by <span className="font-semibold">voidsshadows</span> on Discord.</div>
