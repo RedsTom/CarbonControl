@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev --prefer-offline --no-audit
 
 # Stage 2: Builder
 FROM node:22-alpine AS builder
@@ -18,7 +18,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci
+RUN npm ci --prefer-offline --no-audit
 
 # Copy source code
 COPY . .
