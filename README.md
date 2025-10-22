@@ -44,6 +44,34 @@ Some functionality — such as **device discovery** — requires access to low-l
 
 ---
 
+## 🐳 Docker Deployment
+
+CarbonControl can be easily deployed using Docker for production environments.
+
+### Quick Start with Docker
+
+```bash
+# Build the image
+docker build -t carboncontrol:latest .
+
+# Run the container
+docker run -p 3000:3000 carboncontrol:latest
+```
+
+### Using Docker Compose
+
+```bash
+# Start the application
+docker-compose up -d
+
+# Stop the application
+docker-compose down
+```
+
+For detailed Docker deployment instructions, configuration options, and troubleshooting, see **[DOCKER.md](DOCKER.md)**.
+
+---
+
 ## 📄 License
 
 MIT — free to use, modify, and contribute.  
