@@ -9,6 +9,27 @@ This guide explains how to build and run CarbonControl using Docker.
 
 ## Quick Start
 
+### Using Make (Recommended)
+
+If you have `make` installed, you can use the provided Makefile for simplified commands:
+
+```bash
+# Build the image
+make build
+
+# Run the container
+make run
+
+# View logs
+make logs
+
+# Stop the container
+make stop
+
+# See all available commands
+make help
+```
+
 ### Using Docker
 
 1. **Build the Docker image:**
