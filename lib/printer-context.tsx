@@ -2,10 +2,10 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
-import { SDCPClient, type PrinterStatus, type PrinterAttributes } from "./sdcp-client"
+import { SDCPClientProxy, type PrinterStatus, type PrinterAttributes } from "./sdcp-client-proxy"
 
 interface PrinterContextType {
-  client: SDCPClient
+  client: SDCPClientProxy
   isConnected: boolean
   status: PrinterStatus | null
   attributes: PrinterAttributes | null
@@ -40,7 +40,7 @@ interface PrinterContextType {
 const PrinterContext = createContext<PrinterContextType | undefined>(undefined)
 
 export function PrinterProvider({ children }: { children: React.ReactNode }) {
-  const [client] = useState(() => new SDCPClient())
+  const [client] = useState(() => new SDCPClientProxy())
   const [isConnected, setIsConnected] = useState(false)
   const [status, setStatus] = useState<PrinterStatus | null>(null)
   const [attributes, setAttributes] = useState<PrinterAttributes | null>(null)
