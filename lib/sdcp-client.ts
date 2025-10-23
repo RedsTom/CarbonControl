@@ -96,6 +96,8 @@ export class SDCPClient {
   private ws: WebSocket | null = null
   private mainboardID = ""
   private printerIP = ""
+  private wsPort = 3030
+  private videoPort = 3031
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 3000
@@ -225,18 +227,20 @@ export class SDCPClient {
     })
   }
 
-  async connect(printerIP: string): Promise<void> {
+  async connect(printerIP: string, wsPort: number = 3030, videoPort: number = 3031): Promise<void> {
     this.printerIP = printerIP
+    this.wsPort = wsPort
+    this.videoPort = videoPort
 
     return new Promise((resolve, reject) => {
       try {
         // Try multiple WebSocket paths as specified in the documentation
         const wsUrls = [
-          `ws://${printerIP}:3030/websocket`,
-          `ws://${printerIP}:3030/ws`,
-          `ws://${printerIP}:3030/`,
-          `ws://${printerIP}:3030/api/websocket`,
-          `ws://${printerIP}:3030/sdcp`,
+          `ws://${printerIP}:${wsPort}/websocket`,
+          `ws://${printerIP}:${wsPort}/ws`,
+          `ws://${printerIP}:${wsPort}/`,
+          `ws://${printerIP}:${wsPort}/api/websocket`,
+          `ws://${printerIP}:${wsPort}/sdcp`,
         ]
 
         this.connectWithUrls(wsUrls, 0, resolve, reject)

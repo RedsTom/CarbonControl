@@ -236,18 +236,32 @@ export default function ElegooPrinterUI() {
   const { toast } = useToast()
 
   const [ipAddress, setIpAddress] = useState("192.168.1.100")
+  const [wsPort, setWsPort] = useState("3030")
+  const [videoPort, setVideoPort] = useState("3031")
 
-  // Load saved IP address from localStorage on mount
+  // Load saved IP address and ports from localStorage on mount
   useEffect(() => {
     const savedIP = localStorage.getItem('printerIP')
+    const savedWsPort = localStorage.getItem('printerWsPort')
+    const savedVideoPort = localStorage.getItem('printerVideoPort')
+
     if (savedIP) {
       setIpAddress(savedIP)
       setIpLoadedFromCache(true)
-      // Show a brief toast notification that IP was loaded from cache
+    }
+    if (savedWsPort) {
+      setWsPort(savedWsPort)
+    }
+    if (savedVideoPort) {
+      setVideoPort(savedVideoPort)
+    }
+
+    if (savedIP) {
+      // Show a brief toast notification that settings were loaded from cache
       setTimeout(() => {
         toast({
-          title: "IP Address Restored",
-          description: `Loaded saved IP: ${savedIP}`,
+          title: "Settings Restored",
+          description: `Loaded saved IP: ${savedIP}, WS Port: ${savedWsPort || '3030'}, Video Port: ${savedVideoPort || '3031'}`,
         })
       }, 500)
     }
@@ -353,11 +367,15 @@ export default function ElegooPrinterUI() {
         return newList
       }
       return prev
+    localStorage.removeItem('printerWsPort')
+    localStorage.removeItem('printerVideoPort')
     })
-    
+    setWsPort("3030")
+    setVideoPort("3031")
+
     toast({
       title: "Printer Discovered!",
-      description: `Found ${printer.data.Name} at ${newIP}`,
+      description: "Saved IP address and ports have been cleared",
     })
   }
 
@@ -638,10 +656,14 @@ export default function ElegooPrinterUI() {
 
   // Only set the camera video URL after connection
   const [connectedIp, setConnectedIp] = useState<string | null>(null);
+  const [connectedVideoPort, setConnectedVideoPort] = useState<string | null>(null);
   useEffect(() => {
-    if (isConnected) setConnectedIp(ipAddress);
-  }, [isConnected, ipAddress]);
-  const debugVideoUrl = connectedIp ? `http://${connectedIp}:3031/video` : null;
+    if (isConnected) {
+      setConnectedIp(ipAddress);
+      setConnectedVideoPort(videoPort);
+    }
+  }, [isConnected, ipAddress, videoPort]);
+  const debugVideoUrl = connectedIp && connectedVideoPort ? `http://${connectedIp}:${connectedVideoPort}/video` : null;
 
   // Fan states for individual fans
   const modelFanSpeed = status?.CurrentFanSpeed?.ModelFan ?? 0;
@@ -703,42 +725,77 @@ export default function ElegooPrinterUI() {
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Label htmlFor="ip-address" className="text-sm font-medium text-muted-foreground">
-              IP Address:
-            </Label>
-            <div className="relative">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="ip-address" className="text-sm font-medium text-muted-foreground">
+                IP:
+              </Label>
+              <div className="relative">
+                <Input
+                  id="ip-address"
+                  value={ipAddress}
+                  onChange={(e) => {
+                    const newIP = e.target.value
+                    setIpAddress(newIP)
+                    localStorage.setItem('printerIP', newIP)
+                  }}
+                  className="w-40 bg-input border-border transition-all duration-200 focus:border-primary focus:ring-primary/20"
+                  disabled={isConnected}
+                />
+                {ipLoadedFromCache && !isConnected && (
+                  <div className="absolute -top-2 -right-2 flex items-center gap-1">
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-green-500/10 border-green-500/30 text-green-600"
+                    >
+                      Cached
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={clearCachedIP}
+                      className="h-4 w-4 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      title="Clear cached settings"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="ws-port" className="text-sm font-medium text-muted-foreground">
+                WS Port:
+              </Label>
               <Input
-                id="ip-address"
-                value={ipAddress}
+                id="ws-port"
+                type="number"
+                value={wsPort}
                 onChange={(e) => {
-                  const newIP = e.target.value
-                  setIpAddress(newIP)
-                  // Save IP to localStorage when manually changed
-                  localStorage.setItem('printerIP', newIP)
+                  const newPort = e.target.value
+                  setWsPort(newPort)
+                  localStorage.setItem('printerWsPort', newPort)
                 }}
-                className="w-48 bg-input border-border transition-all duration-200 focus:border-primary focus:ring-primary/20"
+                className="w-20 bg-input border-border transition-all duration-200 focus:border-primary focus:ring-primary/20"
                 disabled={isConnected}
               />
-              {ipLoadedFromCache && !isConnected && (
-                <div className="absolute -top-2 -right-2 flex items-center gap-1">
-                  <Badge 
-                    variant="outline" 
-                    className="text-xs bg-green-500/10 border-green-500/30 text-green-600"
-                  >
-                    Cached
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={clearCachedIP}
-                    className="h-4 w-4 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                    title="Clear cached IP"
-                  >
-                    ×
-                  </Button>
-                </div>
-              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="video-port" className="text-sm font-medium text-muted-foreground">
+                Video Port:
+              </Label>
+              <Input
+                id="video-port"
+                type="number"
+                value={videoPort}
+                onChange={(e) => {
+                  const newPort = e.target.value
+                  setVideoPort(newPort)
+                  localStorage.setItem('printerVideoPort', newPort)
+                }}
+                className="w-20 bg-input border-border transition-all duration-200 focus:border-primary focus:ring-primary/20"
+                disabled={isConnected}
+              />
             </div>
             {isConnected ? (
               <Button

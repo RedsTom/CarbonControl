@@ -10,7 +10,7 @@ interface PrinterContextType {
   status: PrinterStatus | null
   attributes: PrinterAttributes | null
   videoUrl: string | null
-  connect: (ip: string) => Promise<void>
+  connect: (ip: string, wsPort?: number, videoPort?: number) => Promise<void>
   disconnect: () => void
   startPrint: (filename: string) => Promise<void>
   pausePrint: () => Promise<void>
@@ -114,9 +114,9 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
   }, [isConnected, client])
 
   const connect = useCallback(
-    async (ip: string) => {
+    async (ip: string, wsPort?: number, videoPort?: number) => {
       try {
-        await client.connect(ip)
+        await client.connect(ip, wsPort, videoPort)
       } catch (error) {
         console.error("Failed to connect to printer:", error)
         throw error
